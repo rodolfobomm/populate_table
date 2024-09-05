@@ -1,0 +1,93 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+public class DBMakerPopulateTables {
+
+    private static final String JDBC_URL = "jdbc:dbmaker:type4://<ip_do_banco>:<porta_do_banco>/<nome_do_banco>";
+    private static final String USERNAME = "<username_DB>";
+    private static final String PASSWORD = "<sua_senha>";
+
+    public static void main(String[] args) {
+        long startTime = System.currentTimeMillis(); // Marca o início da operação
+
+        try (Connection connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD)) {
+            connection.setAutoCommit(false); // Desabilita o auto-commit para melhorar o desempenho
+
+            // SQL para criar a tabela employees
+            String createTableEmployees = "CREATE TABLE employees (" +
+                                          "id INT PRIMARY KEY, " +
+                                          "name VARCHAR(50), " +
+                                          "address VARCHAR(100))";
+
+            // SQL para criar a tabela products
+            String createTableProducts = "CREATE TABLE products (" +
+                                         "product_id INT PRIMARY KEY, " +
+                                         "product_name VARCHAR(50), " +
+                                         "price DECIMAL(10, 2))";
+
+            try (PreparedStatement createStmt = connection.prepareStatement(createTableEmployees);
+                 PreparedStatement createStmtProducts = connection.prepareStatement(createTableProducts)) {
+
+                createStmt.executeUpdate();
+                createStmtProducts.executeUpdate();
+
+                // SQL para inserir registros na tabela employees
+                String insertEmployees = "INSERT INTO employees (id, name, address) VALUES (?, ?, ?)";
+                try (PreparedStatement insertStmtEmployees = connection.prepareStatement(insertEmployees)) {
+
+                    for (int i = 1; i <= 10000000; i++) { // Inserir 10 milhões de registros
+                        insertStmtEmployees.setInt(1, i);
+                        insertStmtEmployees.setString(2, "Employee" + i);
+                        insertStmtEmployees.setString(3, "Address" + i);
+                        insertStmtEmployees.addBatch();
+
+                        if (i % 10000 == 0) { // Executa em lotes de 10.000
+                            insertStmtEmployees.executeBatch();
+                            connection.commit();
+                        }
+                    }
+
+                    insertStmtEmployees.executeBatch(); // Executa qualquer lote restante
+                    connection.commit();
+                    System.out.println("Employees table populated successfully.");
+                }
+
+                // SQL para inserir registros na tabela products
+                String insertProducts = "INSERT INTO products (product_id, product_name, price) VALUES (?, ?, ?)";
+                try (PreparedStatement insertStmtProducts = connection.prepareStatement(insertProducts)) {
+
+                    for (int i = 1; i <= 10000000; i++) { // Inserir 10 milhões de registros
+                        insertStmtProducts.setInt(1, i);
+                        insertStmtProducts.setString(2, "Product" + i);
+                        insertStmtProducts.setBigDecimal(3, new java.math.BigDecimal(Math.random() * 1000));
+                        insertStmtProducts.addBatch();
+
+                        if (i % 10000 == 0) { // Executa em lotes de 10.000
+                            insertStmtProducts.executeBatch();
+                            connection.commit();
+                        }
+                    }
+
+                    insertStmtProducts.executeBatch(); // Executa qualquer lote restante
+                    connection.commit();
+                    System.out.println("Products table populated successfully.");
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                try {
+                    connection.rollback(); // Reverte a transação em caso de erro
+                } catch (SQLException rollbackEx) {
+                    rollbackEx.printStackTrace();
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        long endTime = System.currentTimeMillis(); // Marca o fim da operação
+        long elapsedTime = endTime - startTime; // Calcula o tempo decorrido
+        System.out.println("Time taken for insertion: " + elapsedTime + " milliseconds");
+    }
+}
